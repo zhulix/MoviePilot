@@ -370,6 +370,16 @@ class SearchChain(ChainBase):
             no_exists=no_exists
         )
 
+        # 判断是否需要分页搜索（仅订阅搜索时启用，通过 no_exists 参数判断）
+        # no_exists 不为空表示是订阅搜索，需要查找缺失的剧集
+        need_paging = (
+            mediainfo.type == MediaType.TV
+            and no_exists
+            and settings.SUBSCRIBE_SEARCH_MAX_PAGE > 0
+        )
+        # 最大分页数
+        max_page = settings.SUBSCRIBE_SEARCH_MAX_PAGE if need_paging else 1
+
         # 站点搜索结果
         torrents: List[TorrentInfo] = []
         # 站点搜索次数
@@ -377,24 +387,43 @@ class SearchChain(ChainBase):
 
         # 多关键字执行搜索
         for search_word in keywords:
-            # 强制休眠 1-10 秒
-            if search_count > 0:
-                logger.info(f"已搜索 {search_count} 次，强制休眠 1-10 秒 ...")
-                time.sleep(random.randint(1, 10))
+            # 分页搜索
+            for page in range(max_page):
+                if global_vars.is_system_stopped:
+                    break
 
-            # 搜索站点
-            results = self.__search_all_sites(
-                mediainfo=mediainfo,
-                keyword=search_word,
-                sites=sites,
-                area=area
-            ) or []
-            # 合并结果
+                # 强制休眠 1-10 秒
+                if search_count > 0:
+                    logger.info(f"已搜索 {search_count} 次，强制休眠 1-10 秒 ...")
+                    time.sleep(random.randint(1, 10))
 
-            search_count += 1
-            torrents.extend(results)
+                if page > 0:
+                    logger.info(f"继续搜索第 {page + 1} 页...")
 
-            # 有结果则停止
+                # 搜索站点
+                results = self.__search_all_sites(
+                    mediainfo=mediainfo,
+                    keyword=search_word,
+                    sites=sites,
+                    area=area,
+                    page=page
+                ) or []
+
+                search_count += 1
+                torrents.extend(results)
+
+                # 如果没有结果，停止分页
+                if not results:
+                    if page > 0:
+                        logger.info(f"第 {page + 1} 页无结果，停止分页搜索")
+                    break
+
+                # 从第二页开始，如果结果数量明显减少（说明接近尾页了），停止分页
+                if page > 0 and len(results) < (settings.MAX_SEARCH_RESULT or 100) * 0.3:
+                    logger.info(f"第 {page + 1} 页结果较少({len(results)}条)，停止分页搜索")
+                    break
+
+            # 有结果则停止多关键字搜索
             if not settings.SEARCH_MULTIPLE_NAME and torrents:
                 logger.info(f"共搜索到 {len(torrents)} 个资源，停止搜索")
                 break
@@ -453,6 +482,16 @@ class SearchChain(ChainBase):
             no_exists=no_exists
         )
 
+        # 判断是否需要分页搜索（仅订阅搜索时启用，通过 no_exists 参数判断）
+        # no_exists 不为空表示是订阅搜索，需要查找缺失的剧集
+        need_paging = (
+            mediainfo.type == MediaType.TV
+            and no_exists
+            and settings.SUBSCRIBE_SEARCH_MAX_PAGE > 0
+        )
+        # 最大分页数
+        max_page = settings.SUBSCRIBE_SEARCH_MAX_PAGE if need_paging else 1
+
         # 站点搜索结果
         torrents: List[TorrentInfo] = []
         # 站点搜索次数
@@ -460,22 +499,44 @@ class SearchChain(ChainBase):
 
         # 多关键字执行搜索
         for search_word in keywords:
-            # 强制休眠 1-10 秒
-            if search_count > 0:
-                logger.info(f"已搜索 {search_count} 次，强制休眠 1-10 秒 ...")
-                await asyncio.sleep(random.randint(1, 10))
-            # 搜索站点
-            torrents.extend(
-                await self.__async_search_all_sites(
+            # 分页搜索
+            for page in range(max_page):
+                if global_vars.is_system_stopped:
+                    break
+
+                # 强制休眠 1-10 秒
+                if search_count > 0:
+                    logger.info(f"已搜索 {search_count} 次，强制休眠 1-10 秒 ...")
+                    await asyncio.sleep(random.randint(1, 10))
+
+                if page > 0:
+                    logger.info(f"继续搜索第 {page + 1} 页...")
+
+                # 搜索站点
+                results = await self.__async_search_all_sites(
                     mediainfo=mediainfo,
                     keyword=search_word,
                     sites=sites,
-                    area=area
+                    area=area,
+                    page=page
                 ) or []
-            )
-            search_count += 1
-            # 有结果则停止
-            if torrents:
+
+                search_count += 1
+                torrents.extend(results)
+
+                # 如果没有结果，停止分页
+                if not results:
+                    if page > 0:
+                        logger.info(f"第 {page + 1} 页无结果，停止分页搜索")
+                    break
+
+                # 从第二页开始，如果结果数量明显减少（说明接近尾页了），停止分页
+                if page > 0 and len(results) < (settings.MAX_SEARCH_RESULT or 100) * 0.3:
+                    logger.info(f"第 {page + 1} 页结果较少({len(results)}条)，停止分页搜索")
+                    break
+
+            # 有结果则停止多关键字搜索
+            if not settings.SEARCH_MULTIPLE_NAME and torrents:
                 logger.info(f"共搜索到 {len(torrents)} 个资源，停止搜索")
                 break
 

@@ -279,6 +279,10 @@ class ConfigModel(BaseModel):
     SEARCH_MULTIPLE_NAME: bool = False
     # 最大搜索名称数量
     MAX_SEARCH_NAME_LIMIT: int = 2
+    # 单站点最大搜索结果数量（默认100，设置为0表示不限制）
+    MAX_SEARCH_RESULT: int = 100
+    # 订阅搜索最大分页数（用于搜索大量剧集时自动翻页，0表示不翻页）
+    SUBSCRIBE_SEARCH_MAX_PAGE: int = 3
 
     # ==================== 下载配置 ====================
     # 种子标签
